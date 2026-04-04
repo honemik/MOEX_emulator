@@ -21,32 +21,35 @@ jobs:
       matrix:
         include:
           - platform: "macos-latest"
-            target: "aarch64-apple-darwin"
-            args: "--target aarch64-apple-darwin"
-          - platform: "macos-latest"
-            target: "x86_64-apple-darwin"
-            args: "--target x86_64-apple-darwin"
+            target: "universal-apple-darwin"
+            artifact_name: "macos-universal"
+            portable_platform: "macos"
+            args: "--target universal-apple-darwin --bundles app,dmg --no-sign"
           - platform: "ubuntu-22.04"
             target: "x86_64-unknown-linux-gnu"
-            args: ""
+            artifact_name: "linux-x86_64"
+            portable_platform: "linux"
+            args: "--target x86_64-unknown-linux-gnu --bundles appimage,deb --no-sign"
           - platform: "windows-latest"
             target: "x86_64-pc-windows-msvc"
-            args: ""
+            artifact_name: "windows-x86_64"
+            portable_platform: "windows"
+            args: "--target x86_64-pc-windows-msvc --bundles nsis --no-sign"
 
     runs-on: ${{ matrix.platform }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: lts/*
           cache: npm
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -74,18 +77,41 @@ jobs:
         run: python scripts/build_clean_db.py
 
       - name: Build and publish Tauri bundles
+        id: tauri_build
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: .
-          tauriScript: npm run tauri --
           tagName: app-v__VERSION__
           releaseName: "MOEX Emulator v__VERSION__"
           releaseBody: |
             Automated multi-platform build for MOEX Emulator.
-            Download the asset that matches your operating system.
+            This release includes both platform installers/bundles and portable zip packages.
           releaseDraft: true
           prerelease: false
-          uploadWorkflowArtifacts: true
           args: ${{ matrix.args }}
+
+      - name: Create portable zip package
+        run: >
+          python scripts/create_portable_bundle.py
+          --platform ${{ matrix.portable_platform }}
+          --target ${{ matrix.target }}
+          --app-name "MOEX Emulator"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact_name }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**
+            dist-portable/*.zip
+
+      - name: Upload portable zip to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release upload app-v${{ steps.tauri_build.outputs.appVersion }}
+          dist-portable/*.zip
+          --clobber
