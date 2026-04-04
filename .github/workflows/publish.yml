@@ -1,0 +1,91 @@
+name: publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - release
+    tags:
+      - "v*"
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            target: "aarch64-apple-darwin"
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest"
+            target: "x86_64-apple-darwin"
+            args: "--target x86_64-apple-darwin"
+          - platform: "ubuntu-22.04"
+            target: "x86_64-unknown-linux-gnu"
+            args: ""
+          - platform: "windows-latest"
+            target: "x86_64-pc-windows-msvc"
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ startsWith(matrix.platform, 'macos-') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> target
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build clean runtime database
+        run: python scripts/build_clean_db.py
+
+      - name: Build and publish Tauri bundles
+        uses: tauri-apps/tauri-action@v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: .
+          tauriScript: npm run tauri --
+          tagName: app-v__VERSION__
+          releaseName: "MOEX Emulator v__VERSION__"
+          releaseBody: |
+            Automated multi-platform build for MOEX Emulator.
+            Download the asset that matches your operating system.
+          releaseDraft: true
+          prerelease: false
+          uploadWorkflowArtifacts: true
+          args: ${{ matrix.args }}
