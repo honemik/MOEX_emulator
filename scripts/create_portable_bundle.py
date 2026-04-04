@@ -50,6 +50,28 @@ def copy_payload(source: Path, destination_root: Path) -> None:
         shutil.copy2(source, destination)
 
 
+def embed_database(root: Path, platform: str, app_name: str) -> None:
+    if platform == "macos":
+        app_bundle = root / f"{app_name}.app"
+        if not app_bundle.exists():
+            app_bundle = root / "moex_emulator.app"
+
+        if app_bundle.exists():
+            database_root = app_bundle / "Contents" / "Resources" / "database"
+            database_root.mkdir(parents=True, exist_ok=True)
+            return copy_database_payload(database_root)
+
+    database_root = root / "database"
+    database_root.mkdir(parents=True, exist_ok=True)
+    copy_database_payload(database_root)
+
+
+def copy_database_payload(database_root: Path) -> None:
+    root = Path(__file__).resolve().parent.parent
+    shutil.copy2(root / "database" / "moex_clean.sqlite", database_root / "moex_clean.sqlite")
+    shutil.copytree(root / "database" / "images", database_root / "images", dirs_exist_ok=True)
+
+
 def write_zip(archive_path: Path, source_dir: Path) -> None:
     with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for path in sorted(source_dir.rglob("*")):
@@ -90,11 +112,7 @@ def main() -> None:
 
     bundle_root.mkdir(parents=True, exist_ok=True)
     copy_payload(binary_path, bundle_root)
-
-    database_root = bundle_root / "database"
-    database_root.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(root / "database" / "moex_clean.sqlite", database_root / "moex_clean.sqlite")
-    shutil.copytree(root / "database" / "images", database_root / "images", dirs_exist_ok=True)
+    embed_database(bundle_root, args.platform, args.app_name)
 
     write_zip(archive_path, bundle_root)
     shutil.rmtree(bundle_root)

@@ -92,6 +92,13 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
+      - name: Verify macOS app bundle resources
+        if: matrix.platform == 'macos-latest'
+        run: |
+          APP_PATH="src-tauri/target/${{ matrix.target }}/release/bundle/macos/MOEX Emulator.app"
+          test -f "$APP_PATH/Contents/Resources/database/moex_clean.sqlite"
+          test -d "$APP_PATH/Contents/Resources/database/images"
+
       - name: Create portable zip package
         run: >
           python scripts/create_portable_bundle.py
