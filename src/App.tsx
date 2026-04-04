@@ -106,8 +106,51 @@ function sameAnswers(left: number[], right: number[]) {
   return sortedLeft.every((value, index) => value === sortedRight[index]);
 }
 
+function normalizeSelectedAnswers(question: QuestionRecord, selected: number[]) {
+  const uniqueSorted = [...new Set(selected)].sort((left, right) => left - right);
+  if (question.isMultipleChoice || uniqueSorted.length <= 1) {
+    return uniqueSorted;
+  }
+
+  const acceptedAnswer = uniqueSorted.find((index) => question.correctAnswerIndices.includes(index));
+  return [acceptedAnswer ?? uniqueSorted[uniqueSorted.length - 1]];
+}
+
+function normalizeSessionForQuestions(session: ExamSession, questions: QuestionRecord[]) {
+  let changed = false;
+  const questionsByNumber = new Map(questions.map((question) => [question.questionNumber, question]));
+  const normalizedAnswers = Object.fromEntries(
+    Object.entries(session.answers).map(([questionNumber, selected]) => {
+      const numericQuestionNumber = Number(questionNumber);
+      const question = questionsByNumber.get(numericQuestionNumber);
+      const nextSelected = question ? normalizeSelectedAnswers(question, selected) : selected;
+      if (!sameAnswers(selected, nextSelected)) {
+        changed = true;
+      }
+
+      return [numericQuestionNumber, nextSelected];
+    }),
+  ) as Record<number, number[]>;
+
+  return changed
+    ? {
+        ...session,
+        answers: normalizedAnswers,
+      }
+    : session;
+}
+
 function isQuestionCorrect(question: QuestionRecord, answers: Record<number, number[]>) {
-  return sameAnswers(question.correctAnswerIndices, answers[question.questionNumber] ?? []);
+  const selectedAnswers = normalizeSelectedAnswers(question, answers[question.questionNumber] ?? []);
+  if (selectedAnswers.length === 0) {
+    return false;
+  }
+
+  if (question.isMultipleChoice) {
+    return sameAnswers(question.correctAnswerIndices, selectedAnswers);
+  }
+
+  return selectedAnswers.some((index) => question.correctAnswerIndices.includes(index));
 }
 
 function summarizeResult(questions: QuestionRecord[], answers: Record<number, number[]>) {
@@ -336,8 +379,9 @@ function App() {
       return;
     }
 
-    setSavedSession(loadStoredSession(savedSessionKeys));
-  }, [savedSessionKeys]);
+    const loaded = loadStoredSession(savedSessionKeys);
+    setSavedSession(loaded && examPayload ? normalizeSessionForQuestions(loaded, examPayload.questions) : loaded);
+  }, [savedSessionKeys, examPayload]);
 
   useEffect(() => {
     if (!normalizedSearch) {
@@ -583,11 +627,14 @@ function App() {
       }
 
       const existingAnswers = current.answers[currentQuestion.questionNumber] ?? [];
-      const nextAnswers = currentQuestion.isMultipleChoice
-        ? existingAnswers.includes(answerIndex)
-          ? existingAnswers.filter((item) => item !== answerIndex)
-          : [...existingAnswers, answerIndex].sort((left, right) => left - right)
-        : [answerIndex];
+      const nextAnswers = normalizeSelectedAnswers(
+        currentQuestion,
+        currentQuestion.isMultipleChoice
+          ? existingAnswers.includes(answerIndex)
+            ? existingAnswers.filter((item) => item !== answerIndex)
+            : [...existingAnswers, answerIndex]
+          : [answerIndex],
+      );
 
       return {
         ...current,

@@ -4,6 +4,7 @@ import type {
   DataPathDebugPayload,
   ExamCatalogItem,
   ExamPayload,
+  ResolvedImageAsset,
 } from "./types";
 
 export function normalizeInvokeError(error: unknown) {
@@ -56,8 +57,8 @@ export function loadExam(examId: string) {
   return invoke<ExamPayload>("load_exam", { examId });
 }
 
-export function resolveImagePath(relativePath: string) {
-  return invoke<string>("resolve_image_path", { relativePath });
+export function resolveImageAsset(relativePath: string) {
+  return invoke<ResolvedImageAsset>("resolve_image_asset", { relativePath });
 }
 
 export function debugDataPaths() {

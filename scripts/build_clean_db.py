@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = "4"
+SCHEMA_VERSION = "5"
 
 
 def normalize_relative_path(path: str) -> str:
@@ -70,6 +70,24 @@ def extract_option_search_text(options: list[Any]) -> str:
         elif isinstance(option, str) and option.strip():
             chunks.append(option.strip())
     return " ".join(chunks)
+
+
+def infer_is_multiple_choice(raw: dict[str, Any], question_text: str, tags: list[str]) -> bool:
+    explicit_type = raw.get("question_type")
+    if isinstance(explicit_type, str) and explicit_type.strip().lower() in {
+        "multiple_choice",
+        "multiple_select",
+        "multi_select",
+        "multiple-answer",
+    }:
+        return True
+
+    explicit_flag = raw.get("is_multiple_choice")
+    if isinstance(explicit_flag, bool):
+        return explicit_flag
+
+    combined_text = " ".join([question_text, " ".join(tags)]).lower()
+    return any(token in combined_text for token in ["複選", "可複選", "multiple select"])
 
 
 def build_clean_db(source_db: Path, output_db: Path) -> None:
@@ -172,6 +190,7 @@ def build_clean_db(source_db: Path, output_db: Path) -> None:
                 question_images = parse_string_array(row["question_images"])
                 question_text = (row["question_text"] or raw.get("question") or "").strip()
                 option_search_text = extract_option_search_text(options)
+                is_multiple_choice = infer_is_multiple_choice(raw, question_text, tags)
 
                 target_conn.execute(
                     insert_question_sql,
@@ -184,7 +203,7 @@ def build_clean_db(source_db: Path, output_db: Path) -> None:
                         json.dumps(answers, ensure_ascii=False),
                         json.dumps(question_images, ensure_ascii=False),
                         json.dumps(tags, ensure_ascii=False),
-                        1 if len(answers) > 1 else 0,
+                        1 if is_multiple_choice else 0,
                     ),
                 )
 

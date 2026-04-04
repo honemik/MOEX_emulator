@@ -3,9 +3,9 @@ mod models;
 
 use data::{
   bootstrap_catalog as load_bootstrap, list_exams as query_exams, load_exam as fetch_exam,
-  resolve_image_path as fetch_image_path, debug_data_paths as load_debug_data_paths,
+  resolve_image_asset as fetch_image_asset, debug_data_paths as load_debug_data_paths,
 };
-use models::{BootstrapPayload, DataPathDebugPayload, ExamCatalogItem, ExamPayload};
+use models::{BootstrapPayload, DataPathDebugPayload, ExamCatalogItem, ExamPayload, ResolvedImageAsset};
 use tauri::AppHandle;
 
 #[tauri::command]
@@ -24,8 +24,8 @@ fn load_exam(app: AppHandle, exam_id: String) -> Result<ExamPayload, String> {
 }
 
 #[tauri::command]
-fn resolve_image_path(app: AppHandle, relative_path: String) -> Result<String, String> {
-  fetch_image_path(&app, &relative_path)
+fn resolve_image_asset(app: AppHandle, relative_path: String) -> Result<ResolvedImageAsset, String> {
+  fetch_image_asset(&app, &relative_path)
 }
 
 #[tauri::command]
@@ -40,7 +40,7 @@ pub fn run() {
       bootstrap_catalog,
       list_exams,
       load_exam,
-      resolve_image_path,
+      resolve_image_asset,
       debug_data_paths
     ])
     .run(tauri::generate_context!())

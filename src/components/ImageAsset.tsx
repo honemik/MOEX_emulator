@@ -1,8 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import { resolveImagePath } from "../lib/api";
-
-const imageCache = new Map<string, string>();
+import { resolveImageAsset } from "../lib/api";
 
 interface ImageAssetProps {
   relativePath: string;
@@ -11,27 +9,18 @@ interface ImageAssetProps {
 }
 
 export function ImageAsset({ relativePath, alt, className }: ImageAssetProps) {
-  const [src, setSrc] = useState<string | null>(imageCache.get(relativePath) ?? null);
+  const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
 
-    if (imageCache.has(relativePath)) {
-      setSrc(imageCache.get(relativePath) ?? null);
-      setError(null);
-      return () => {
-        active = false;
-      };
-    }
-
     setSrc(null);
     setError(null);
 
-    resolveImagePath(relativePath)
-      .then((absolutePath) => {
-        const assetUrl = convertFileSrc(absolutePath);
-        imageCache.set(relativePath, assetUrl);
+    resolveImageAsset(relativePath)
+      .then(({ absolutePath, revision }) => {
+        const assetUrl = `${convertFileSrc(absolutePath)}?v=${encodeURIComponent(revision)}`;
         if (active) {
           setSrc(assetUrl);
         }

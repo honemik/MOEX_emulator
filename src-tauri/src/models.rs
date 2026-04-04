@@ -25,6 +25,13 @@ pub struct DataPathDebugPayload {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ResolvedImageAsset {
+  pub absolute_path: String,
+  pub revision: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExamCatalogItem {
   pub exam_id: String,
   pub exam_year: Option<i64>,

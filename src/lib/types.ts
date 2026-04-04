@@ -27,6 +27,11 @@ export interface DataPathDebugPayload {
   checkedCandidates: string[];
 }
 
+export interface ResolvedImageAsset {
+  absolutePath: string;
+  revision: string;
+}
+
 export interface ExamCatalogItem {
   examId: string;
   examYear: number | null;

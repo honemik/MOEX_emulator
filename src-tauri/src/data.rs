@@ -2,6 +2,7 @@ use std::{
   collections::HashSet,
   fs,
   path::PathBuf,
+  time::UNIX_EPOCH,
 };
 
 use rusqlite::{Connection, OpenFlags};
@@ -10,7 +11,7 @@ use url::Url;
 
 use crate::models::{
   BootstrapPayload, ChoiceOption, DataPathDebugPayload, ExamCatalogItem, ExamPayload,
-  InitializationPayload, QuestionRecord,
+  InitializationPayload, QuestionRecord, ResolvedImageAsset,
 };
 
 #[derive(Clone, Debug)]
@@ -139,7 +140,7 @@ pub fn load_exam(app: &AppHandle, exam_id: &str) -> Result<ExamPayload, String> 
   Ok(ExamPayload { exam, questions })
 }
 
-pub fn resolve_image_path(app: &AppHandle, relative_path: &str) -> Result<String, String> {
+pub fn resolve_image_asset(app: &AppHandle, relative_path: &str) -> Result<ResolvedImageAsset, String> {
   let data_paths = resolve_data_paths(app)?;
   let normalized = normalize_relative_path(relative_path);
   let stripped = normalized.strip_prefix("images/").unwrap_or(normalized.as_str());
@@ -151,7 +152,19 @@ pub fn resolve_image_path(app: &AppHandle, relative_path: &str) -> Result<String
     return Err("圖片路徑不在允許範圍內".to_string());
   }
 
-  Ok(canonical_target.display().to_string())
+  let metadata = fs::metadata(&canonical_target).map_err(|error| error.to_string())?;
+  let modified_at = metadata
+    .modified()
+    .ok()
+    .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+    .map(|duration| duration.as_millis())
+    .unwrap_or(0);
+  let revision = format!("{}-{}", modified_at, metadata.len());
+
+  Ok(ResolvedImageAsset {
+    absolute_path: canonical_target.display().to_string(),
+    revision,
+  })
 }
 
 pub fn debug_data_paths(app: &AppHandle) -> DataPathDebugPayload {
