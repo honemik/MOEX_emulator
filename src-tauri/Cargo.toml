@@ -1,0 +1,20 @@
+[package]
+name = "moex_emulator"
+version = "0.1.0"
+description = "Standalone MOEX simulator rebuilt from the local database"
+authors = ["Codex"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "moex_emulator_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.6", features = [] }
+
+[dependencies]
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+tauri = { version = "2.10.3", features = ["protocol-asset"] }
