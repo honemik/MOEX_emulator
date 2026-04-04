@@ -1,11 +1,12 @@
 use std::{
-  fs,
   collections::HashSet,
+  fs,
   path::PathBuf,
 };
 
 use rusqlite::{Connection, OpenFlags};
 use tauri::{AppHandle, Manager};
+use url::Url;
 
 use crate::models::{
   BootstrapPayload, ChoiceOption, DataPathDebugPayload, ExamCatalogItem, ExamPayload,
@@ -179,15 +180,30 @@ pub fn debug_data_paths(app: &AppHandle) -> DataPathDebugPayload {
 }
 
 fn open_database(path: &PathBuf) -> Result<Connection, String> {
+  let database_uri = build_sqlite_uri(path)?;
   let connection = Connection::open_with_flags(
-    path,
-    OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    &database_uri,
+    OpenFlags::SQLITE_OPEN_READ_ONLY
+      | OpenFlags::SQLITE_OPEN_NO_MUTEX
+      | OpenFlags::SQLITE_OPEN_URI,
   )
-  .map_err(|error| error.to_string())?;
+  .map_err(|error| format!("{} (uri={})", error, database_uri))?;
   connection
     .pragma_update(None, "query_only", "ON")
     .map_err(|error| error.to_string())?;
   Ok(connection)
+}
+
+fn build_sqlite_uri(path: &PathBuf) -> Result<String, String> {
+  let canonical_path = fs::canonicalize(path).map_err(|error| error.to_string())?;
+  let mut url = Url::from_file_path(&canonical_path).map_err(|()| {
+    format!(
+      "無法轉換資料庫路徑為 SQLite URI: {}",
+      canonical_path.display()
+    )
+  })?;
+  url.set_query(Some("mode=ro&immutable=1"));
+  Ok(url.to_string())
 }
 
 fn resolve_data_paths(app: &AppHandle) -> Result<DataPaths, String> {

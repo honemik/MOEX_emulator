@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 
 
 def normalize_relative_path(path: str) -> str:
@@ -89,7 +89,7 @@ def build_clean_db(source_db: Path, output_db: Path) -> None:
     try:
         target_conn.executescript(
             """
-            PRAGMA journal_mode = WAL;
+            PRAGMA journal_mode = DELETE;
             PRAGMA synchronous = OFF;
             PRAGMA temp_store = MEMORY;
 
@@ -284,6 +284,7 @@ def build_clean_db(source_db: Path, output_db: Path) -> None:
             """
             CREATE INDEX idx_questions_exam_number ON questions (exam_id, question_number);
             ANALYZE;
+            VACUUM;
             """
         )
         target_conn.close()
