@@ -21,6 +21,12 @@ export interface BootstrapPayload {
   exams: ExamCatalogItem[];
 }
 
+export interface DataPathDebugPayload {
+  resourceDir: string | null;
+  executableDir: string | null;
+  checkedCandidates: string[];
+}
+
 export interface ExamCatalogItem {
   examId: string;
   examYear: number | null;

@@ -3,9 +3,9 @@ mod models;
 
 use data::{
   bootstrap_catalog as load_bootstrap, list_exams as query_exams, load_exam as fetch_exam,
-  resolve_image_path as fetch_image_path,
+  resolve_image_path as fetch_image_path, debug_data_paths as load_debug_data_paths,
 };
-use models::{BootstrapPayload, ExamCatalogItem, ExamPayload};
+use models::{BootstrapPayload, DataPathDebugPayload, ExamCatalogItem, ExamPayload};
 use tauri::AppHandle;
 
 #[tauri::command]
@@ -28,6 +28,11 @@ fn resolve_image_path(app: AppHandle, relative_path: String) -> Result<String, S
   fetch_image_path(&app, &relative_path)
 }
 
+#[tauri::command]
+fn debug_data_paths(app: AppHandle) -> DataPathDebugPayload {
+  load_debug_data_paths(&app)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -35,7 +40,8 @@ pub fn run() {
       bootstrap_catalog,
       list_exams,
       load_exam,
-      resolve_image_path
+      resolve_image_path,
+      debug_data_paths
     ])
     .run(tauri::generate_context!())
     .expect("error while running MOEX Emulator");

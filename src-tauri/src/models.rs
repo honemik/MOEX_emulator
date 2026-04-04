@@ -17,6 +17,14 @@ pub struct BootstrapPayload {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DataPathDebugPayload {
+  pub resource_dir: Option<String>,
+  pub executable_dir: Option<String>,
+  pub checked_candidates: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExamCatalogItem {
   pub exam_id: String,
   pub exam_year: Option<i64>,

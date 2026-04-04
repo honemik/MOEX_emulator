@@ -446,6 +446,7 @@ button {
   background: rgba(192, 106, 87, 0.14);
   border-left: 4px solid var(--danger);
   color: #6d281b;
+  white-space: pre-wrap;
 }
 
 .busy-overlay,

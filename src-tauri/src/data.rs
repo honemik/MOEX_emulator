@@ -8,14 +8,20 @@ use rusqlite::{Connection, OpenFlags};
 use tauri::{AppHandle, Manager};
 
 use crate::models::{
-  BootstrapPayload, ChoiceOption, ExamCatalogItem, ExamPayload, InitializationPayload,
-  QuestionRecord,
+  BootstrapPayload, ChoiceOption, DataPathDebugPayload, ExamCatalogItem, ExamPayload,
+  InitializationPayload, QuestionRecord,
 };
 
 #[derive(Clone, Debug)]
 struct DataPaths {
   database_path: PathBuf,
   image_root: PathBuf,
+}
+
+struct CandidateCollection {
+  resource_dir: Option<PathBuf>,
+  executable_dir: Option<PathBuf>,
+  candidates: Vec<(PathBuf, PathBuf)>,
 }
 
 pub fn bootstrap_catalog(app: &AppHandle) -> Result<BootstrapPayload, String> {
@@ -147,6 +153,31 @@ pub fn resolve_image_path(app: &AppHandle, relative_path: &str) -> Result<String
   Ok(canonical_target.display().to_string())
 }
 
+pub fn debug_data_paths(app: &AppHandle) -> DataPathDebugPayload {
+  let collection = collect_data_path_candidates(app);
+  DataPathDebugPayload {
+    resource_dir: collection
+      .resource_dir
+      .map(|path| path.display().to_string()),
+    executable_dir: collection
+      .executable_dir
+      .map(|path| path.display().to_string()),
+    checked_candidates: collection
+      .candidates
+      .into_iter()
+      .map(|(database_path, image_root)| {
+        format!(
+          "db={} [{}], images={} [{}]",
+          database_path.display(),
+          if database_path.exists() { "exists" } else { "missing" },
+          image_root.display(),
+          if image_root.exists() { "exists" } else { "missing" }
+        )
+      })
+      .collect(),
+  }
+}
+
 fn open_database(path: &PathBuf) -> Result<Connection, String> {
   let connection = Connection::open_with_flags(
     path,
@@ -160,39 +191,40 @@ fn open_database(path: &PathBuf) -> Result<Connection, String> {
 }
 
 fn resolve_data_paths(app: &AppHandle) -> Result<DataPaths, String> {
-  let mut candidates = Vec::new();
-  let mut seen = HashSet::new();
+  let collection = collect_data_path_candidates(app);
+  let candidates = collection.candidates;
 
-  if let Ok(resource_dir) = app.path().resource_dir() {
-    push_candidate_roots(&mut candidates, &mut seen, &resource_dir, 4);
-  }
+  let checked_paths = candidates
+    .iter()
+    .map(|(database_path, image_root)| {
+      format!(
+        "db={}, images={}",
+        database_path.display(),
+        image_root.display()
+      )
+    })
+    .collect::<Vec<_>>()
+    .join(" | ");
 
-  if let Ok(executable_dir) = app.path().executable_dir() {
-    push_candidate_roots(&mut candidates, &mut seen, &executable_dir, 5);
-  }
-
-  if let Some(workspace_root) = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent() {
-    push_candidate_pair(&mut candidates, &mut seen, workspace_root);
-  }
+  let resource_dir = collection
+    .resource_dir
+    .as_ref()
+    .map(|path| path.display().to_string())
+    .unwrap_or_else(|| "<unavailable>".to_string());
+  let executable_dir = collection
+    .executable_dir
+    .as_ref()
+    .map(|path| path.display().to_string())
+    .unwrap_or_else(|| "<unavailable>".to_string());
 
   let (database_path, image_root) = candidates
     .iter()
     .find(|(database_path, image_root)| database_path.exists() && image_root.exists())
     .ok_or_else(|| {
-      let checked_paths = candidates
-        .iter()
-        .map(|(database_path, image_root)| {
-          format!(
-            "db={}, images={}",
-            database_path.display(),
-            image_root.display()
-          )
-        })
-        .collect::<Vec<_>>()
-        .join(" | ");
-
       format!(
-        "找不到 database/moex_clean.sqlite。請先執行 python scripts/build_clean_db.py。已檢查路徑：{}",
+        "找不到 database/moex_clean.sqlite。請先執行 python scripts/build_clean_db.py。resource_dir={} executable_dir={} 已檢查路徑：{}",
+        resource_dir,
+        executable_dir,
         checked_paths
       )
     })?;
@@ -201,6 +233,31 @@ fn resolve_data_paths(app: &AppHandle) -> Result<DataPaths, String> {
     database_path: database_path.clone(),
     image_root: image_root.clone(),
   })
+}
+
+fn collect_data_path_candidates(app: &AppHandle) -> CandidateCollection {
+  let mut candidates = Vec::new();
+  let mut seen = HashSet::new();
+  let resource_dir = app.path().resource_dir().ok();
+  let executable_dir = app.path().executable_dir().ok();
+
+  if let Some(resource_dir) = &resource_dir {
+    push_candidate_roots(&mut candidates, &mut seen, &resource_dir, 4);
+  }
+
+  if let Some(executable_dir) = &executable_dir {
+    push_candidate_roots(&mut candidates, &mut seen, &executable_dir, 5);
+  }
+
+  if let Some(workspace_root) = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent() {
+    push_candidate_pair(&mut candidates, &mut seen, workspace_root);
+  }
+
+  CandidateCollection {
+    resource_dir,
+    executable_dir,
+    candidates,
+  }
 }
 
 fn push_candidate_roots(

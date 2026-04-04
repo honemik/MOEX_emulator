@@ -15,7 +15,14 @@ import { MathText } from "./components/MathText";
 import { Modal } from "./components/Modal";
 import { QuestionPanel } from "./components/QuestionPanel";
 import { StatusGrid } from "./components/StatusGrid";
-import { bootstrapCatalog, listExams, loadExam } from "./lib/api";
+import {
+  bootstrapCatalog,
+  debugDataPaths,
+  formatDataPathDebug,
+  listExams,
+  loadExam,
+  normalizeInvokeError,
+} from "./lib/api";
 import {
   buildLegacySessionKeys,
   buildSessionKey,
@@ -295,7 +302,19 @@ function App() {
         setCatalog(bootstrap.exams);
       } catch (error) {
         if (active) {
-          setErrorMessage(error instanceof Error ? error.message : "初始化失敗");
+          const baseMessage = `初始化失敗：${normalizeInvokeError(error)}`;
+          try {
+            const diagnostics = await debugDataPaths();
+            if (active) {
+              setErrorMessage(`${baseMessage}\n\n${formatDataPathDebug(diagnostics)}`);
+            }
+          } catch (diagnosticError) {
+            if (active) {
+              setErrorMessage(
+                `${baseMessage}\n\n診斷資訊取得失敗：${normalizeInvokeError(diagnosticError)}`,
+              );
+            }
+          }
         }
       } finally {
         if (active) {
@@ -346,7 +365,7 @@ function App() {
         if (active) {
           setSearchResults([]);
           setSearchResultsQuery(normalizedSearch);
-          setErrorMessage(error instanceof Error ? error.message : "搜尋失敗");
+          setErrorMessage(`搜尋失敗：${normalizeInvokeError(error)}`);
         }
       })
       .finally(() => {
@@ -518,7 +537,7 @@ function App() {
         setScreen("login");
       });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "題庫載入失敗");
+      setErrorMessage(`題庫載入失敗：${normalizeInvokeError(error)}`);
     } finally {
       setBusyMessage(null);
     }
