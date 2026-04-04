@@ -1,5 +1,6 @@
 use std::{
   fs,
+  collections::HashSet,
   path::PathBuf,
 };
 
@@ -160,36 +161,74 @@ fn open_database(path: &PathBuf) -> Result<Connection, String> {
 
 fn resolve_data_paths(app: &AppHandle) -> Result<DataPaths, String> {
   let mut candidates = Vec::new();
+  let mut seen = HashSet::new();
 
   if let Ok(resource_dir) = app.path().resource_dir() {
-    candidates.push((
-      resource_dir.join("database").join("moex_clean.sqlite"),
-      resource_dir.join("database").join("images"),
-    ));
-    candidates.push((
-      resource_dir.join("moex_clean.sqlite"),
-      resource_dir.join("images"),
-    ));
+    push_candidate_roots(&mut candidates, &mut seen, &resource_dir, 4);
+  }
+
+  if let Ok(executable_dir) = app.path().executable_dir() {
+    push_candidate_roots(&mut candidates, &mut seen, &executable_dir, 5);
   }
 
   if let Some(workspace_root) = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent() {
-    candidates.push((
-      workspace_root.join("database").join("moex_clean.sqlite"),
-      workspace_root.join("database").join("images"),
-    ));
+    push_candidate_pair(&mut candidates, &mut seen, workspace_root);
   }
 
   let (database_path, image_root) = candidates
-    .into_iter()
+    .iter()
     .find(|(database_path, image_root)| database_path.exists() && image_root.exists())
     .ok_or_else(|| {
-      "找不到 database/moex_clean.sqlite。請先執行 python scripts/build_clean_db.py".to_string()
+      let checked_paths = candidates
+        .iter()
+        .map(|(database_path, image_root)| {
+          format!(
+            "db={}, images={}",
+            database_path.display(),
+            image_root.display()
+          )
+        })
+        .collect::<Vec<_>>()
+        .join(" | ");
+
+      format!(
+        "找不到 database/moex_clean.sqlite。請先執行 python scripts/build_clean_db.py。已檢查路徑：{}",
+        checked_paths
+      )
     })?;
 
   Ok(DataPaths {
-    database_path,
-    image_root,
+    database_path: database_path.clone(),
+    image_root: image_root.clone(),
   })
+}
+
+fn push_candidate_roots(
+  candidates: &mut Vec<(PathBuf, PathBuf)>,
+  seen: &mut HashSet<(PathBuf, PathBuf)>,
+  start: &PathBuf,
+  max_ancestors: usize,
+) {
+  for ancestor in start.ancestors().take(max_ancestors) {
+    push_candidate_pair(candidates, seen, ancestor);
+  }
+}
+
+fn push_candidate_pair(
+  candidates: &mut Vec<(PathBuf, PathBuf)>,
+  seen: &mut HashSet<(PathBuf, PathBuf)>,
+  base: impl Into<PathBuf>,
+) {
+  let base = base.into();
+  let direct = (base.join("database").join("moex_clean.sqlite"), base.join("database").join("images"));
+  if seen.insert(direct.clone()) {
+    candidates.push(direct);
+  }
+
+  let flat = (base.join("moex_clean.sqlite"), base.join("images"));
+  if seen.insert(flat.clone()) {
+    candidates.push(flat);
+  }
 }
 
 fn map_exam_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ExamCatalogItem> {
