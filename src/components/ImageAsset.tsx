@@ -1,6 +1,5 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import { resolveImageAsset } from "../lib/api";
+import { resolveImageAssetUrl } from "../lib/api";
 
 interface ImageAssetProps {
   relativePath: string;
@@ -18,9 +17,8 @@ export function ImageAsset({ relativePath, alt, className }: ImageAssetProps) {
     setSrc(null);
     setError(null);
 
-    resolveImageAsset(relativePath)
-      .then(({ absolutePath, revision }) => {
-        const assetUrl = `${convertFileSrc(absolutePath)}?v=${encodeURIComponent(revision)}`;
+    resolveImageAssetUrl(relativePath)
+      .then((assetUrl) => {
         if (active) {
           setSrc(assetUrl);
         }
@@ -44,5 +42,5 @@ export function ImageAsset({ relativePath, alt, className }: ImageAssetProps) {
     return <div className="image-placeholder">圖片載入中...</div>;
   }
 
-  return <img className={className} src={src} alt={alt} loading="lazy" />;
+  return <img className={className} data-relative-path={relativePath} src={src} alt={alt} loading="lazy" />;
 }

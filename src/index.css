@@ -1494,6 +1494,161 @@ body {
   overflow: hidden;
 }
 
+.download-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.download-panel-controls,
+.download-option-group,
+.download-action-group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.download-panel-controls {
+  padding: 14px;
+  border: 1px solid #cfcfcf;
+  background: #ffffff;
+  justify-content: space-between;
+}
+
+.download-toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: #111;
+}
+
+.download-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.download-help-text,
+.download-preview-note {
+  padding: 10px 12px;
+  border: 1px solid #cfcfcf;
+  background: #ffffff;
+  color: #111;
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.download-preview-container {
+  background: #ffffff;
+  overflow: auto;
+}
+
+.export-answer-sheet {
+  width: 100%;
+  padding: 10px 12px;
+  background: #fff;
+  color: #000;
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  user-select: text;
+}
+
+.export-sheet-section {
+  margin-bottom: 16px;
+  padding: 0;
+  border: 0;
+  background: #fff;
+}
+
+.export-sheet-header {
+  background: #fff;
+}
+
+.export-sheet-title-block h1 {
+  margin: 0 0 4px;
+  color: #000;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.export-sheet-title-block p {
+  margin: 0;
+  color: #000;
+  font-size: 14px;
+}
+
+.export-sheet-meta,
+.export-sheet-summary {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.export-sheet-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.export-question-card {
+  break-inside: avoid;
+}
+
+.export-question-text {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.export-image-stack {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.export-question-image {
+  max-width: 100%;
+}
+
+.export-option-list {
+  display: grid;
+  gap: 6px;
+}
+
+.export-option-row {
+  padding: 0;
+  border: 0;
+  background: #fff;
+}
+
+.export-option-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.export-option-label {
+  font-weight: 700;
+  min-width: 34px;
+  color: #000;
+}
+
+.export-option-label.correct {
+  color: #2e7d32;
+}
+
+.export-option-label.wrong {
+  color: #c62828;
+}
+
+.export-option-text {
+  white-space: pre-wrap;
+  color: #000;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 .result-record-layout {
   display: grid;
   gap: 18px;
@@ -1866,6 +2021,16 @@ body {
 
   .review-meta-strip {
     grid-template-columns: 1fr;
+  }
+
+  .download-panel-controls {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .download-option-group,
+  .download-action-group {
+    display: grid;
   }
 
   .keyboard-row-number {

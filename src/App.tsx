@@ -1,7 +1,8 @@
 import {
+  Suspense,
+  lazy,
   startTransition,
   type ReactNode,
-  useDeferredValue,
   useEffect,
   useEffectEvent,
   useMemo,
@@ -16,13 +17,21 @@ import { Modal } from "./components/Modal";
 import { QuestionPanel } from "./components/QuestionPanel";
 import { StatusGrid } from "./components/StatusGrid";
 import {
+  formatResultStateLabel,
+  getAnswerLabels,
+  getQuestionResultState,
+  isQuestionCorrect,
+  normalizeSelectedAnswers,
+  sameAnswers,
+} from "./lib/examResults";
+import {
   bootstrapCatalog,
   debugDataPaths,
   formatDataPathDebug,
-  listExams,
   loadExam,
   normalizeInvokeError,
 } from "./lib/api";
+import { useCatalogSearch } from "./hooks/useCatalogSearch";
 import {
   buildLegacySessionKeys,
   buildSessionKey,
@@ -48,7 +57,9 @@ interface CandidateProfile {
   admissionTicket: string;
 }
 
-type ResultTab = "summary" | "record" | "review";
+type ResultTab = "summary" | "record" | "review" | "download";
+
+const AnswerSheetDownloadPanel = lazy(() => import("./components/AnswerSheetDownloadPanel"));
 
 const WAITING_SECONDS = 61;
 const SUBJECT_FILTER_OPTIONS = [
@@ -96,26 +107,6 @@ function buildCandidateProfile(idNumber: string) {
   };
 }
 
-function sameAnswers(left: number[], right: number[]) {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  const sortedLeft = [...left].sort((a, b) => a - b);
-  const sortedRight = [...right].sort((a, b) => a - b);
-  return sortedLeft.every((value, index) => value === sortedRight[index]);
-}
-
-function normalizeSelectedAnswers(question: QuestionRecord, selected: number[]) {
-  const uniqueSorted = [...new Set(selected)].sort((left, right) => left - right);
-  if (question.isMultipleChoice || uniqueSorted.length <= 1) {
-    return uniqueSorted;
-  }
-
-  const acceptedAnswer = uniqueSorted.find((index) => question.correctAnswerIndices.includes(index));
-  return [acceptedAnswer ?? uniqueSorted[uniqueSorted.length - 1]];
-}
-
 function normalizeSessionForQuestions(session: ExamSession, questions: QuestionRecord[]) {
   let changed = false;
   const questionsByNumber = new Map(questions.map((question) => [question.questionNumber, question]));
@@ -138,19 +129,6 @@ function normalizeSessionForQuestions(session: ExamSession, questions: QuestionR
         answers: normalizedAnswers,
       }
     : session;
-}
-
-function isQuestionCorrect(question: QuestionRecord, answers: Record<number, number[]>) {
-  const selectedAnswers = normalizeSelectedAnswers(question, answers[question.questionNumber] ?? []);
-  if (selectedAnswers.length === 0) {
-    return false;
-  }
-
-  if (question.isMultipleChoice) {
-    return sameAnswers(question.correctAnswerIndices, selectedAnswers);
-  }
-
-  return selectedAnswers.some((index) => question.correctAnswerIndices.includes(index));
 }
 
 function summarizeResult(questions: QuestionRecord[], answers: Record<number, number[]>) {
@@ -183,13 +161,6 @@ function summarizeResult(questions: QuestionRecord[], answers: Record<number, nu
   } satisfies ResultSummary;
 }
 
-function getAnswerLabels(question: QuestionRecord, selected: number[]) {
-  return selected
-    .map((index) => question.options[index]?.label)
-    .filter((label): label is string => Boolean(label))
-    .join("、");
-}
-
 function formatPreparedAt(timestamp: string) {
   const asNumber = Number(timestamp);
   if (Number.isNaN(asNumber)) {
@@ -199,27 +170,6 @@ function formatPreparedAt(timestamp: string) {
   return new Date(asNumber * 1000).toLocaleString("zh-TW");
 }
 
-function getQuestionResultState(question: QuestionRecord, answers: Record<number, number[]>) {
-  const selectedAnswers = answers[question.questionNumber] ?? [];
-
-  if (selectedAnswers.length === 0) {
-    return "blank";
-  }
-
-  return isQuestionCorrect(question, answers) ? "correct" : "wrong";
-}
-
-function formatResultStateLabel(state: ReturnType<typeof getQuestionResultState>) {
-  if (state === "correct") {
-    return "答對";
-  }
-
-  if (state === "wrong") {
-    return "答錯";
-  }
-
-  return "未作答";
-}
 
 function getElapsedSeconds(session: ExamSession | null, fallbackTotalSeconds: number) {
   if (!session) {
@@ -260,10 +210,6 @@ function App() {
   const [yearFilter, setYearFilter] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("");
   const [attemptFilter, setAttemptFilter] = useState("");
-  const [searchResults, setSearchResults] = useState<ExamCatalogItem[]>([]);
-  const [searchResultsQuery, setSearchResultsQuery] = useState("");
-  const [searchLoading, setSearchLoading] = useState(false);
-  const deferredSearch = useDeferredValue(search);
 
   const sessionStorageKey = useMemo(
     () => (selectedExam && candidate ? buildSessionKey(selectedExam.examId, candidate.idNumber) : null),
@@ -293,7 +239,16 @@ function App() {
   const shouldShowResultRecord = showAllScore;
   const elapsedSeconds = getElapsedSeconds(examSession, totalQuestions * 60);
   const elapsedLabel = formatDuration(elapsedSeconds);
-  const normalizedSearch = deferredSearch.trim().toLowerCase();
+  const exportGeneratedAtLabel = new Date().toLocaleString("zh-TW");
+  const {
+    normalizedSearch,
+    searchResults,
+    searchResultsQuery,
+    searchLoading,
+  } = useCatalogSearch({
+    query: search,
+    onError: setErrorMessage,
+  });
   const catalogForDisplay = normalizedSearch
     ? searchResultsQuery === normalizedSearch
       ? searchResults
@@ -382,46 +337,6 @@ function App() {
     const loaded = loadStoredSession(savedSessionKeys);
     setSavedSession(loaded && examPayload ? normalizeSessionForQuestions(loaded, examPayload.questions) : loaded);
   }, [savedSessionKeys, examPayload]);
-
-  useEffect(() => {
-    if (!normalizedSearch) {
-      setSearchResults([]);
-      setSearchResultsQuery("");
-      setSearchLoading(false);
-      return;
-    }
-
-    let active = true;
-    setSearchLoading(true);
-
-    listExams(normalizedSearch)
-      .then((results) => {
-        if (!active) {
-          return;
-        }
-
-        startTransition(() => {
-          setSearchResults(results);
-          setSearchResultsQuery(normalizedSearch);
-        });
-      })
-      .catch((error) => {
-        if (active) {
-          setSearchResults([]);
-          setSearchResultsQuery(normalizedSearch);
-          setErrorMessage(`搜尋失敗：${normalizeInvokeError(error)}`);
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setSearchLoading(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [normalizedSearch]);
 
   const tickWaitingClock = useEffectEvent(() => {
     setWaitingSeconds((current) => {
@@ -1511,6 +1426,13 @@ function App() {
               >
                 題目檢討
               </button>
+              <button
+                className={`result-tab-button ${resultTab === "download" ? "active" : ""}`}
+                type="button"
+                onClick={() => setResultTab("download")}
+              >
+                下載
+              </button>
             </div>
 
             {resultTab === "summary" ? (
@@ -1527,6 +1449,30 @@ function App() {
 
             {resultTab === "review" ? (
               <div className="result-tab-panel">{renderResultReviewWorkspace()}</div>
+            ) : null}
+
+            {resultTab === "download" ? (
+              <div className="result-tab-panel">
+                <Suspense fallback={<div className="download-help-text">載入下載工具中...</div>}>
+                  {selectedExam && candidate && examPayload && examSession ? (
+                    <AnswerSheetDownloadPanel
+                      admissionTicket={candidate.admissionTicket}
+                      answers={examSession.answers}
+                      candidateId={candidate.idNumber}
+                      candidateName={candidate.name}
+                      elapsedLabel={elapsedLabel}
+                      examSubtitle={`${selectedExam.inferredStage} | ${selectedExam.questionCount} 題`}
+                      examTitle={`${selectedExam.displayTitle} 完整答案卷`}
+                      generatedAtLabel={exportGeneratedAtLabel}
+                      marks={examSession.marks}
+                      questions={examPayload.questions}
+                      resultSummary={resultSummary}
+                      seatNumber={candidate.seatNumber}
+                      onError={setErrorMessage}
+                    />
+                  ) : null}
+                </Suspense>
+              </div>
             ) : null}
           </>
         ) : (

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type {
   BootstrapPayload,
   DataPathDebugPayload,
@@ -57,8 +57,34 @@ export function loadExam(examId: string) {
   return invoke<ExamPayload>("load_exam", { examId });
 }
 
+const resolvedImageAssetCache = new Map<string, Promise<ResolvedImageAsset>>();
+const imageAssetUrlCache = new Map<string, Promise<string>>();
+
 export function resolveImageAsset(relativePath: string) {
-  return invoke<ResolvedImageAsset>("resolve_image_asset", { relativePath });
+  const cacheKey = relativePath.trim();
+  if (!resolvedImageAssetCache.has(cacheKey)) {
+    resolvedImageAssetCache.set(
+      cacheKey,
+      invoke<ResolvedImageAsset>("resolve_image_asset", { relativePath: cacheKey }),
+    );
+  }
+
+  return resolvedImageAssetCache.get(cacheKey)!;
+}
+
+export function resolveImageAssetUrl(relativePath: string) {
+  const cacheKey = relativePath.trim();
+  if (!imageAssetUrlCache.has(cacheKey)) {
+    imageAssetUrlCache.set(
+      cacheKey,
+      resolveImageAsset(cacheKey).then(
+        ({ absolutePath, revision }) =>
+          `${convertFileSrc(absolutePath)}?v=${encodeURIComponent(revision)}`,
+      ),
+    );
+  }
+
+  return imageAssetUrlCache.get(cacheKey)!;
 }
 
 export function debugDataPaths() {
