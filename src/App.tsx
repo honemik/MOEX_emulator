@@ -176,13 +176,6 @@ function getElapsedSeconds(session: ExamSession | null, fallbackTotalSeconds: nu
     return 0;
   }
 
-  const startedAt = Date.parse(session.startedAt);
-  const endedAt = session.endedAt ? Date.parse(session.endedAt) : Number.NaN;
-
-  if (!Number.isNaN(startedAt) && !Number.isNaN(endedAt) && endedAt >= startedAt) {
-    return Math.floor((endedAt - startedAt) / 1000);
-  }
-
   return Math.max(0, fallbackTotalSeconds - session.remainingSeconds);
 }
 
@@ -364,6 +357,7 @@ function App() {
               answers: {},
               marks: {},
               completed: false,
+              isPaused: false,
               startedAt: new Date().toISOString(),
             };
       setExamSession(nextSession);
@@ -380,7 +374,7 @@ function App() {
 
   const tickExamClock = useEffectEvent(() => {
     setExamSession((current) => {
-      if (!current || current.completed) {
+      if (!current || current.completed || current.isPaused) {
         return current;
       }
 
@@ -392,7 +386,7 @@ function App() {
   });
 
   useEffect(() => {
-    if (!examSession || !["exam", "browse"].includes(screen)) {
+    if (!examSession || examSession.isPaused || !["exam", "browse"].includes(screen)) {
       return;
     }
 
@@ -400,7 +394,7 @@ function App() {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [screen, Boolean(examSession), tickExamClock]);
+  }, [screen, Boolean(examSession), examSession?.isPaused, tickExamClock]);
 
   const completeExam = useEffectEvent((timedOut: boolean) => {
     if (!examPayload || !examSession) {
@@ -417,6 +411,7 @@ function App() {
         ? {
             ...current,
             completed: true,
+            isPaused: false,
             endedAt: new Date().toISOString(),
           }
         : current,
@@ -607,6 +602,17 @@ function App() {
         ? {
             ...current,
             zoom: nextZoom,
+          }
+        : current,
+    );
+  }
+
+  function handleToggleExamClock() {
+    setExamSession((current) =>
+      current && !current.completed
+        ? {
+            ...current,
+            isPaused: !current.isPaused,
           }
         : current,
     );
@@ -864,6 +870,8 @@ function App() {
     remainingTimeLabel: string;
     answered: number;
     unanswered: number;
+    clockPaused?: boolean;
+    onToggleClock?: () => void;
     actions?: ReactNode;
   }) {
     if (!selectedExam || !candidate) {
@@ -922,6 +930,21 @@ function App() {
           <div className="moex-stat-item time">
             <span>賸餘時間：</span>
             <strong className="accent-red">{options.remainingTimeLabel}</strong>
+            {options.onToggleClock ? (
+              <button
+                aria-label={options.clockPaused ? "繼續計時" : "暫停計時"}
+                aria-pressed={options.clockPaused}
+                className="clock-toggle-button"
+                title={options.clockPaused ? "繼續計時" : "暫停計時"}
+                type="button"
+                onClick={options.onToggleClock}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`clock-toggle-icon ${options.clockPaused ? "play" : "pause"}`}
+                />
+              </button>
+            ) : null}
             <em>(含延長考試時間0分鐘)</em>
           </div>
         </div>
@@ -1261,6 +1284,8 @@ function App() {
           remainingTimeLabel: formatDuration(examSession.remainingSeconds),
           answered: answeredCount,
           unanswered: unansweredCount,
+          clockPaused: Boolean(examSession.isPaused),
+          onToggleClock: handleToggleExamClock,
           actions: (
             <>
               <button className="chrome-action-button small" type="button" onClick={() => setScreen("browse")}>
@@ -1306,6 +1331,8 @@ function App() {
           remainingTimeLabel: formatDuration(examSession.remainingSeconds),
           answered: answeredCount,
           unanswered: unansweredCount,
+          clockPaused: Boolean(examSession.isPaused),
+          onToggleClock: handleToggleExamClock,
           actions: (
             <>
               <button className="chrome-action-button small" type="button" onClick={() => setScreen("exam")}>

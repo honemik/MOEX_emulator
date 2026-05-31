@@ -72,6 +72,7 @@ export interface ExamPayload {
 export interface ExamSession {
   currentQuestion: number;
   remainingSeconds: number;
+  isPaused?: boolean;
   zoom: number;
   answers: Record<number, number[]>;
   marks: Record<number, QuestionMark>;

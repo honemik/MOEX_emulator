@@ -1,6 +1,6 @@
 [package]
 name = "moex_emulator"
-version = "0.2.0"
+version = "0.3.0"
 description = "Standalone MOEX simulator rebuilt from the local database"
 authors = ["Codex"]
 edition = "2021"
